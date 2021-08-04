@@ -1,4 +1,25 @@
 version: '3'
 services:
-  redis:
-    image: "redis"
+  mongo:
+    hostname: mongo
+    image: 'bitnami/mongodb:latest'
+    environment:
+      MONGODB_ROOT_PASSWORD: example
+    logging:
+      driver: "none"
+    ports:
+      - 27017:27017
+
+  contracting:
+    build: .
+    environment:
+      - PYTHONUNBUFFERED=1
+      - API_OPT_FIELDS=status,lots,procurementMethodType
+      - PUBLIC_API_HOST=https://lb-api-sandbox-2.prozorro.gov.ua
+      - MONGODB_URL=mongodb://root:example@mongo:27017
+    ports:
+      - 8080:8080
+    depends_on:
+      - mongo
+    volumes:
+      - "./src:/app"
