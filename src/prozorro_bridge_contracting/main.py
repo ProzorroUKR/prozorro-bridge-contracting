@@ -1,9 +1,11 @@
-import asyncio
+# TODO: session to process_listing
+
 from aiohttp import ClientSession
+import asyncio
 from prozorro_crawler.main import main
 
-from .settings import PUBLIC_API_HOST
-from .bridge import process_listing
+from prozorro_bridge_contracting.settings import PUBLIC_API_HOST
+from prozorro_bridge_contracting.bridge import process_listing
 
 
 async def data_handler(session: ClientSession, items: list) -> None:
@@ -18,5 +20,4 @@ async def data_handler(session: ClientSession, items: list) -> None:
 
 
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
     main(data_handler)
