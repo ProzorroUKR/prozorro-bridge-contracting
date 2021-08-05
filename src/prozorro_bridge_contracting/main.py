@@ -1,11 +1,10 @@
-# TODO: session to process_listing
-
 from aiohttp import ClientSession
+import argparse
 import asyncio
 from prozorro_crawler.main import main
 
 from prozorro_bridge_contracting.settings import PUBLIC_API_HOST
-from prozorro_bridge_contracting.bridge import process_listing
+from prozorro_bridge_contracting.bridge import process_listing, sync_single_tender
 
 
 async def data_handler(session: ClientSession, items: list) -> None:
@@ -20,4 +19,11 @@ async def data_handler(session: ClientSession, items: list) -> None:
 
 
 if __name__ == "__main__":
-    main(data_handler)
+    parser = argparse.ArgumentParser(description="Contracting Data Bridge")
+    parser.add_argument("--tender", type=str, help="Tender id to sync", dest="tender_id")
+    params = parser.parse_args()
+    if params.tender_id:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(sync_single_tender(tender_id=params.tender_id))
+    else:
+        main(data_handler)

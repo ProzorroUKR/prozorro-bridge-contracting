@@ -1,9 +1,8 @@
-# TODO: add cookie to requests
-
 from aiohttp import ClientSession
 import asyncio
 import json
 
+from prozorro_crawler.storage import get_feed_position
 from prozorro_bridge_contracting.db import Db
 from prozorro_bridge_contracting.settings import BASE_URL, LOGGER, API_TOKEN, ERROR_INTERVAL
 from prozorro_bridge_contracting.utils import journal_context, extend_contract, check_tender
@@ -18,12 +17,16 @@ from prozorro_bridge_contracting.journal_msg_ids import (
     DATABRIDGE_CACHED,
 )
 
-config = {}
 cache_db = Db()
 SESSION = ClientSession()
 
 
 async def sync_single_tender(tender_id: str) -> None:
+    feed_position = await get_feed_position()
+    server_id = feed_position.get("server_id") if feed_position else None
+    SESSION = ClientSession()
+    SESSION.cookie_jar.update_cookies({"SERVER_ID": server_id})
+
     transferred_contracts = []
     try:
         LOGGER.info(f"Getting tender {tender_id}")
@@ -287,6 +290,8 @@ async def put_contract(contract: dict, dateModified: str) -> None:
 
 
 async def process_listing(server_id_cookie: str, tender: dict) -> None:
+    SESSION.cookie_jar.update_cookies({"SERVER_ID": server_id_cookie})
+
     if not check_tender(tender):
         return None
     await cache_db.get_tender_contracts_fb(tender)
