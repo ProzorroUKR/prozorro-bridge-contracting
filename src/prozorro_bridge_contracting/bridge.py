@@ -24,7 +24,6 @@ SESSION = ClientSession()
 async def sync_single_tender(tender_id: str) -> None:
     feed_position = await get_feed_position()
     server_id = feed_position.get("server_id") if feed_position else None
-    SESSION = ClientSession()
     SESSION.cookie_jar.update_cookies({"SERVER_ID": server_id})
 
     transferred_contracts = []

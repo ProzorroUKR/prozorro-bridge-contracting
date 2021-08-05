@@ -41,6 +41,7 @@ async def test_get_tender_credentials(mocked_logger):
 
 @pytest.mark.asyncio
 @patch("prozorro_bridge_contracting.bridge.LOGGER")
+@patch("prozorro_bridge_contracting.bridge.get_feed_position", AsyncMock(return_value={}))
 async def test_sync_single_tender_contract_skip(mocked_logger):
     contract_data = {"status": "no_active", "id": "1"}
     tender_data = {
@@ -52,6 +53,7 @@ async def test_sync_single_tender_contract_skip(mocked_logger):
         "contracts": [contract_data],
     }
     session_mock = AsyncMock()
+    session_mock.cookie_jar = MagicMock()
     session_mock.get = AsyncMock(
         return_value=MagicMock(status=200, text=AsyncMock(return_value=json.dumps({"data": tender_data})))
     )
@@ -81,6 +83,7 @@ async def test_sync_single_tender_contract_skip(mocked_logger):
 
 
 @pytest.mark.asyncio
+@patch("prozorro_bridge_contracting.bridge.get_feed_position", AsyncMock(return_value={}))
 @patch("prozorro_bridge_contracting.bridge.LOGGER")
 async def test_sync_single_tender_contract_skip_exists(mocked_logger):
     contract_data = {"status": "active", "id": "1"}
@@ -93,6 +96,7 @@ async def test_sync_single_tender_contract_skip_exists(mocked_logger):
         "contracts": [contract_data],
     }
     session_mock = AsyncMock()
+    session_mock.cookie_jar = MagicMock()
     session_mock.get = AsyncMock(
         side_effect=[
             MagicMock(status=200, text=AsyncMock(return_value=json.dumps({"data": tender_data}))),
@@ -128,6 +132,7 @@ async def test_sync_single_tender_contract_skip_exists(mocked_logger):
 
 @pytest.mark.asyncio
 @patch("prozorro_bridge_contracting.bridge.LOGGER")
+@patch("prozorro_bridge_contracting.bridge.get_feed_position", AsyncMock(return_value={}))
 async def test_sync_single_tender(mocked_logger):
     tender_credentials_data = {
         "procuringEntity": "procuringEntity",
@@ -152,6 +157,7 @@ async def test_sync_single_tender(mocked_logger):
     }
 
     session_mock = AsyncMock()
+    session_mock.cookie_jar = MagicMock()
     session_mock.get = AsyncMock(
         side_effect=[
             MagicMock(status=200, text=AsyncMock(return_value=json.dumps({"data": tender_data}))),
@@ -187,6 +193,7 @@ async def test_sync_single_tender(mocked_logger):
 @pytest.mark.asyncio
 @patch("prozorro_bridge_contracting.utils.LOGGER")
 @patch("prozorro_bridge_contracting.bridge.LOGGER")
+@patch("prozorro_bridge_contracting.bridge.get_feed_position", AsyncMock(return_value={}))
 async def test_sync_single_tender_without_extra_data_and_awards(mocked_logger, mocked_utils_logger):
     tender_credentials_data = {
         "procuringEntity": "procuringEntity",
@@ -206,6 +213,7 @@ async def test_sync_single_tender_without_extra_data_and_awards(mocked_logger, m
     }
 
     session_mock = AsyncMock()
+    session_mock.cookie_jar = MagicMock()
     session_mock.get = AsyncMock(
         side_effect=[
             MagicMock(status=200, text=AsyncMock(return_value=json.dumps({"data": tender_data}))),
@@ -269,6 +277,7 @@ async def test_sync_single_tender_without_extra_data_and_awards(mocked_logger, m
 @pytest.mark.asyncio
 @patch("prozorro_bridge_contracting.utils.LOGGER")
 @patch("prozorro_bridge_contracting.bridge.LOGGER")
+@patch("prozorro_bridge_contracting.bridge.get_feed_position", AsyncMock(return_value={}))
 async def test_sync_single_tender_with_lots(mocked_logger, mocked_utils_logger):
     tender_credentials_data = {
         "procuringEntity": "procuringEntity",
@@ -291,6 +300,7 @@ async def test_sync_single_tender_with_lots(mocked_logger, mocked_utils_logger):
     }
 
     session_mock = AsyncMock()
+    session_mock.cookie_jar = MagicMock()
     session_mock.get = AsyncMock(
         side_effect=[
             MagicMock(status=200, text=AsyncMock(return_value=json.dumps({"data": tender_data}))),
@@ -354,6 +364,7 @@ async def test_sync_single_tender_with_lots(mocked_logger, mocked_utils_logger):
 @pytest.mark.asyncio
 @patch("prozorro_bridge_contracting.utils.LOGGER")
 @patch("prozorro_bridge_contracting.bridge.LOGGER")
+@patch("prozorro_bridge_contracting.bridge.get_feed_position", AsyncMock(return_value={}))
 async def test_sync_single_tender_without_extra_data(mocked_logger, mocked_utils_logger):
     tender_credentials_data = {
         "procuringEntity": "procuringEntity",
@@ -382,6 +393,7 @@ async def test_sync_single_tender_without_extra_data(mocked_logger, mocked_utils
     }
 
     session_mock = AsyncMock()
+    session_mock.cookie_jar = MagicMock()
     session_mock.get = AsyncMock(
         side_effect=[
             MagicMock(status=200, text=AsyncMock(return_value=json.dumps({"data": tender_data}))),
@@ -431,6 +443,7 @@ async def test_sync_single_tender_without_extra_data(mocked_logger, mocked_utils
 @pytest.mark.asyncio
 @patch("prozorro_bridge_contracting.utils.LOGGER", MagicMock())
 @patch("prozorro_bridge_contracting.bridge.LOGGER")
+@patch("prozorro_bridge_contracting.bridge.get_feed_position", AsyncMock(return_value={}))
 async def test_sync_single_tender_Exception(mocked_logger):
     tender_credentials_data = {
         "procuringEntity": "procuringEntity",
@@ -448,6 +461,7 @@ async def test_sync_single_tender_Exception(mocked_logger):
     }
 
     session_mock = AsyncMock()
+    session_mock.cookie_jar = MagicMock()
     session_mock.get = AsyncMock(
         side_effect=[
             MagicMock(status=200, text=AsyncMock(return_value=json.dumps({"data": tender_data}))),
@@ -469,6 +483,7 @@ async def test_sync_single_tender_Exception(mocked_logger):
     assert call(f"Successfully transfered contracts: [{contract_data['id']}]") in mocked_logger.info.call_args_list
 
     session_mock = AsyncMock()
+    session_mock.cookie_jar = MagicMock()
     session_mock.get = AsyncMock(
         side_effect=[
             MagicMock(status=200, text=AsyncMock(return_value=json.dumps({"data": tender_data}))),
@@ -771,6 +786,7 @@ async def test_process_listing(mocked_logger):
         "dateModified": datetime.now().isoformat()
     }
     session_mock = AsyncMock()
+    session_mock.cookie_jar = MagicMock()
     session_mock.get = AsyncMock(
         side_effect=[
             MagicMock(status=200, text=AsyncMock(return_value=json.dumps({"data": tender}))),
