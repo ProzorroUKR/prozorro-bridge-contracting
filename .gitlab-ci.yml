@@ -1,0 +1,33 @@
+stages:
+  - test
+  - build
+
+variables:
+  CI_TAG: ci-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA
+  REPO_URL: http://repo-staging.dc.prozorro.gov.ua/repos/helm/
+
+test:
+  image: python:3.8
+  before_script:
+    - pip install -r requirements.txt
+    - pip install -e .
+  script:
+    - coverage run -m pytest tests/
+    - coverage report
+  coverage: '/TOTAL.+ ([0-9]{1,3}%)/'
+
+build:
+  image: docker:git
+  stage: build
+  tags:
+    - shell
+  script:
+    - docker login -u gitlab-ci-token -p $CI_JOB_TOKEN $CI_REGISTRY
+    - docker build -t $CI_REGISTRY_IMAGE:$CI_TAG .
+    - docker tag $CI_REGISTRY_IMAGE:$CI_TAG $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+    - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_REF_SLUG
+  only:
+    - branches
+    - tags
+  dependencies:
+    - test
