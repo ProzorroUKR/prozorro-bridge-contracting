@@ -84,7 +84,7 @@ async def sync_single_tender(tender_id: str) -> None:
 
 
 async def get_tender_credentials(tender_id: str) -> dict:
-    url = f"{BASE_URL}/{tender_id}/extract_credentials"
+    url = f"{BASE_URL}/tenders/{tender_id}/extract_credentials"
     while True:
         LOGGER.info(
             f"Getting credentials for tender {tender_id}",
@@ -128,7 +128,7 @@ async def get_tender(tender_id: str) -> dict:
     while True:
         try:
             response = await SESSION.get(
-                f"{BASE_URL}/{tender_id}",
+                f"{BASE_URL}/tenders/{tender_id}",
                 headers={
                     "Authorization": f"Bearer {API_TOKEN}",
                 }
