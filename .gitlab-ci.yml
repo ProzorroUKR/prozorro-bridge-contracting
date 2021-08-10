@@ -48,11 +48,11 @@ review:
   variables:
     API_TAG: "2.6.20"
     TAG: $CI_COMMIT_REF_SLUG
-    API_HOST: http://api.${CI_COMMIT_REF_SLUG}.$K8S_DOMAIN
+    API_HOST: http://api.${CI_COMMIT_REF_SLUG}.${K8S_DOMAIN}
   script:
     - helm repo add prozorro $REPO_URL
     - helm repo update
-    - helm --debug upgrade $CI_COMMIT_REF_SLUG --install prozorro/prozorro --namespace dev-prozorro
+    - helm --debug upgrade ${CI_COMMIT_REF_SLUG} --install prozorro/prozorro --namespace dev-prozorro
           --set prozorro.api.image.tag=$API_TAG
           --set deployAuctions=false
           --set deployAuction=true

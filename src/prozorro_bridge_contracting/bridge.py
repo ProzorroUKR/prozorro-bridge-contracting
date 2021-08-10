@@ -4,7 +4,7 @@ import json
 
 from prozorro_crawler.storage import get_feed_position
 from prozorro_bridge_contracting.db import Db
-from prozorro_bridge_contracting.settings import BASE_URL, LOGGER, API_TOKEN, ERROR_INTERVAL, USER_AGENT
+from prozorro_bridge_contracting.settings import BASE_URL, LOGGER, ERROR_INTERVAL, HEADERS
 from prozorro_bridge_contracting.utils import journal_context, extend_contract, check_tender
 from prozorro_bridge_contracting.journal_msg_ids import (
     DATABRIDGE_EXCEPTION,
@@ -17,28 +17,24 @@ from prozorro_bridge_contracting.journal_msg_ids import (
     DATABRIDGE_CACHED,
 )
 
-headers = {
-    "Content-Type": "application/json",
-    "Authorization": f"Bearer {API_TOKEN}",
-    "User-Agent": USER_AGENT,
-}
 cache_db = Db()
-SESSION = ClientSession(headers=headers)
 
 
-async def sync_single_tender(tender_id: str) -> None:
-    feed_position = await get_feed_position()
-    server_id = feed_position.get("server_id") if feed_position else None
-    SESSION.cookie_jar.update_cookies({"SERVER_ID": server_id})
+async def sync_single_tender(tender_id: str, session: ClientSession = None) -> None:
+    if not session:
+        session = ClientSession(headers=HEADERS)
+        feed_position = await get_feed_position()
+        server_id = feed_position.get("server_id") if feed_position else None
+        session.cookie_jar.update_cookies({"SERVER_ID": server_id})
 
     transferred_contracts = []
     try:
         LOGGER.info(f"Getting tender {tender_id}")
-        tender = await get_tender(tender_id)
+        tender = await get_tender(tender_id, session)
         LOGGER.info(f"Got tender {tender['id']} in status {tender['status']}")
 
         LOGGER.info(f"Getting tender {tender_id} credentials")
-        tender_credentials = await get_tender_credentials(tender_id)
+        tender_credentials = await get_tender_credentials(tender_id, session)
         LOGGER.info(f"Got tender {tender['id']} credentials")
 
         for contract in tender.get("contracts", []):
@@ -47,7 +43,7 @@ async def sync_single_tender(tender_id: str) -> None:
                 continue
 
             LOGGER.info(f"Checking if contract {contract['id']} already exists")
-            response = await SESSION.get(f"{BASE_URL}/contracts/{contract['id']}")
+            response = await session.get(f"{BASE_URL}/contracts/{contract['id']}")
             if response.status == 200:
                 LOGGER.info(f"Contract exists {contract['id']}")
                 continue
@@ -55,10 +51,10 @@ async def sync_single_tender(tender_id: str) -> None:
 
             LOGGER.info(f"Extending contract {contract['id']} with extra data")
             extend_contract(contract, tender)
-            await prepare_contract_data(contract, tender_credentials)
+            await prepare_contract_data(contract, session, tender_credentials)
 
             LOGGER.info(f"Creating contract {contract['id']}")
-            response = await SESSION.post(f"{BASE_URL}/contracts/{contract['id']}", json={"data": contract})
+            response = await session.post(f"{BASE_URL}/contracts/{contract['id']}", json={"data": contract})
             data = await response.text()
             if response.status == 422:
                 raise ValueError(data)
@@ -81,7 +77,7 @@ async def sync_single_tender(tender_id: str) -> None:
             LOGGER.info(f"Tender {tender_id} does not contain contracts to transfer")
 
 
-async def get_tender_credentials(tender_id: str) -> dict:
+async def get_tender_credentials(tender_id: str, session: ClientSession) -> dict:
     url = f"{BASE_URL}/tenders/{tender_id}/extract_credentials"
     while True:
         LOGGER.info(
@@ -92,7 +88,7 @@ async def get_tender_credentials(tender_id: str) -> dict:
             ),
         )
         try:
-            response = await SESSION.get(url)
+            response = await session.get(url, headers=HEADERS)
             data = await response.text()
             if response.status == 200:
                 data = json.loads(data)
@@ -117,10 +113,10 @@ async def get_tender_credentials(tender_id: str) -> dict:
             await asyncio.sleep(ERROR_INTERVAL)
 
 
-async def get_tender(tender_id: str) -> dict:
+async def get_tender(tender_id: str, session: ClientSession) -> dict:
     while True:
         try:
-            response = await SESSION.get(f"{BASE_URL}/tenders/{tender_id}")
+            response = await session.get(f"{BASE_URL}/tenders/{tender_id}", headers=HEADERS)
             data = await response.text()
             if response.status != 200:
                 raise ConnectionError(f"Error {data}")
@@ -137,7 +133,7 @@ async def get_tender(tender_id: str) -> dict:
             await asyncio.sleep(ERROR_INTERVAL)
 
 
-async def _get_tender_contracts(tender_to_sync: dict) -> list:
+async def _get_tender_contracts(tender_to_sync: dict, session: ClientSession) -> list:
     contracts = []
     if "contracts" not in tender_to_sync:
         LOGGER.warning(
@@ -162,7 +158,7 @@ async def _get_tender_contracts(tender_to_sync: dict) -> list:
                 await cache_db.put_tender_in_cache_by_contract(contract, tender_to_sync["dateModified"])
                 continue
 
-            response = await SESSION.get(f"{BASE_URL}/contracts/{contract['id']}")
+            response = await session.get(f"{BASE_URL}/contracts/{contract['id']}", headers=HEADERS)
             if response.status == 404:
                 LOGGER.info(
                     f"Sync contract {contract['id']} of tender {tender_to_sync['id']}",
@@ -207,10 +203,10 @@ async def _get_tender_contracts(tender_to_sync: dict) -> list:
     return contracts
 
 
-async def get_tender_contracts(tender_to_sync: dict) -> list:
+async def get_tender_contracts(tender_to_sync: dict, session: ClientSession) -> list:
     while True:
         try:
-            return await _get_tender_contracts(tender_to_sync)
+            return await _get_tender_contracts(tender_to_sync, session)
         except Exception as e:
             LOGGER.warn(
                 "Fail to handle tender contracts",
@@ -220,15 +216,15 @@ async def get_tender_contracts(tender_to_sync: dict) -> list:
             await asyncio.sleep(ERROR_INTERVAL)
 
 
-async def prepare_contract_data(contract: dict, credentials: dict = None) -> None:
+async def prepare_contract_data(contract: dict, session: ClientSession, credentials: dict = None) -> None:
     if not credentials:
-        credentials = await get_tender_credentials(contract["tender_id"])
+        credentials = await get_tender_credentials(contract["tender_id"], session)
     data = credentials["data"]
     contract["owner"] = data["owner"]
     contract["tender_token"] = data["tender_token"]
 
 
-async def put_contract(contract: dict, dateModified: str) -> None:
+async def put_contract(contract: dict, dateModified: str, session: ClientSession) -> None:
     while True:
         try:
             LOGGER.info(
@@ -238,7 +234,7 @@ async def put_contract(contract: dict, dateModified: str) -> None:
                     {"CONTRACT_ID": contract["id"], "TENDER_ID": contract["tender_id"]},
                 ),
             )
-            response = await SESSION.post(f"{BASE_URL}/contracts", json={"data": contract})
+            response = await session.post(f"{BASE_URL}/contracts", json={"data": contract}, headers=HEADERS)
             data = await response.text()
             if response.status == 422:
                 raise ValueError(data)
@@ -269,16 +265,14 @@ async def put_contract(contract: dict, dateModified: str) -> None:
             await asyncio.sleep(ERROR_INTERVAL)
 
 
-async def process_listing(server_id_cookie: str, tender: dict) -> None:
-    SESSION.cookie_jar.update_cookies({"SERVER_ID": server_id_cookie})
-
+async def process_listing(session: ClientSession, tender: dict) -> None:
     if not check_tender(tender):
         return None
     await cache_db.get_tender_contracts_fb(tender)
-    tender_to_sync = await get_tender(tender["id"])
-    contracts = await get_tender_contracts(tender_to_sync)
+    tender_to_sync = await get_tender(tender["id"], session)
+    contracts = await get_tender_contracts(tender_to_sync, session)
 
     for contract in contracts:
         extend_contract(contract, tender_to_sync)
-        await prepare_contract_data(contract)
+        await prepare_contract_data(contract, session)
         await put_contract(contract, tender_to_sync["dateModified"])
