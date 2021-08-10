@@ -28,9 +28,8 @@ async def test_get_tender_credentials(mocked_logger):
         MagicMock(status=200, text=AsyncMock(return_value=json.dumps(tender_data))),
     ])
 
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        with patch("prozorro_bridge_contracting.bridge.asyncio.sleep", AsyncMock()) as mocked_sleep:
-            data = await get_tender_credentials(tender_data["id"])
+    with patch("prozorro_bridge_contracting.bridge.asyncio.sleep", AsyncMock()) as mocked_sleep:
+        data = await get_tender_credentials(tender_data["id"], session_mock)
 
     assert session_mock.get.await_count == 2
     assert data == tender_data
@@ -58,8 +57,7 @@ async def test_sync_single_tender_contract_skip(mocked_logger):
         return_value=MagicMock(status=200, text=AsyncMock(return_value=json.dumps({"data": tender_data})))
     )
 
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        await sync_single_tender(tender_data["id"])
+    await sync_single_tender(tender_data["id"], session_mock)
 
     assert session_mock.get.await_count == 2
     calls = [
@@ -105,8 +103,7 @@ async def test_sync_single_tender_contract_skip_exists(mocked_logger):
         ]
     )
 
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        await sync_single_tender(tender_data["id"])
+    await sync_single_tender(tender_data["id"], session_mock)
 
     assert session_mock.get.await_count == 3
     calls = [
@@ -172,8 +169,7 @@ async def test_sync_single_tender(mocked_logger):
             text=AsyncMock(return_value=json.dumps({"data": ["test1", "test2"]})),
         )
     )
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        await sync_single_tender(tender_data["id"])
+    await sync_single_tender(tender_data["id"], session_mock)
 
     calls = [
         call(f"Checking if contract {contract_data['id']} already exists"),
@@ -228,8 +224,7 @@ async def test_sync_single_tender_without_extra_data_and_awards(mocked_logger, m
             text=AsyncMock(return_value=json.dumps({"data": ["test1", "test2"]})),
         )
     )
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        await sync_single_tender(tender_data["id"])
+    await sync_single_tender(tender_data["id"], session_mock)
 
     calls = [
         call(f"Contract {contract_data['id']} does not exists. Prepare contract for creation."),
@@ -315,8 +310,7 @@ async def test_sync_single_tender_with_lots(mocked_logger, mocked_utils_logger):
             text=AsyncMock(return_value=json.dumps({"data": ["test1", "test2"]})),
         )
     )
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        await sync_single_tender(tender_data["id"])
+    await sync_single_tender(tender_data["id"], session_mock)
 
     calls = [
         call(f"Contract {contract_data['id']} does not exists. Prepare contract for creation."),
@@ -408,8 +402,7 @@ async def test_sync_single_tender_without_extra_data(mocked_logger, mocked_utils
             text=AsyncMock(return_value=json.dumps({"data": ["test1", "test2"]})),
         )
     )
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        await sync_single_tender(tender_data["id"])
+    await sync_single_tender(tender_data["id"], session_mock)
 
     calls = [
         call(f"Contract {contract_data['id']} does not exists. Prepare contract for creation."),
@@ -476,8 +469,7 @@ async def test_sync_single_tender_Exception(mocked_logger):
             text=AsyncMock(return_value=json.dumps({"data": ["test1", "test2"]})),
         )
     )
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        await sync_single_tender(tender_data["id"])
+    await sync_single_tender(tender_data["id"], session_mock)
 
     assert session_mock.post.await_count == 1
     assert call(f"Successfully transfered contracts: [{contract_data['id']}]") in mocked_logger.info.call_args_list
@@ -491,9 +483,8 @@ async def test_sync_single_tender_Exception(mocked_logger):
             Exception("Error!"),
         ]
     )
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        with pytest.raises(Exception) as e:
-            await sync_single_tender(tender_data["id"])
+    with pytest.raises(Exception) as e:
+        await sync_single_tender(tender_data["id"], session_mock)
     assert "Error!" in str(e.value)
 
 
@@ -510,10 +501,9 @@ async def test_retry_put_contracts(mocked_logger):
     ]
     session_mock.post = AsyncMock(side_effect=side_effect)
 
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        with patch("prozorro_bridge_contracting.bridge.asyncio.sleep", AsyncMock()) as mocked_sleep:
-            with patch("prozorro_bridge_contracting.bridge.cache_db", AsyncMock()) as mocked_db:
-                await put_contract(contract, dateModified)
+    with patch("prozorro_bridge_contracting.bridge.asyncio.sleep", AsyncMock()) as mocked_sleep:
+        with patch("prozorro_bridge_contracting.bridge.cache_db", AsyncMock()) as mocked_db:
+            await put_contract(contract, dateModified, session_mock)
 
     mocked_logger.exception.assert_called_once_with(e)
     mocked_db.put.assert_called_once_with(contract["id"], True)
@@ -535,10 +525,9 @@ async def test_put_contracts(mocked_logger):
     session_mock = AsyncMock()
     session_mock.post = AsyncMock(side_effect=side_effect)
 
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        with patch("prozorro_bridge_contracting.bridge.cache_db", AsyncMock()) as mocked_db:
-            for contract in list_contracts:
-                await put_contract(contract, dateModified)
+    with patch("prozorro_bridge_contracting.bridge.cache_db", AsyncMock()) as mocked_db:
+        for contract in list_contracts:
+            await put_contract(contract, dateModified, session_mock)
 
     assert len(session_mock.post.await_args_list) == 10
     assert len(mocked_db.put.call_args_list) == 10
@@ -564,8 +553,7 @@ async def test_prepare_contract_data_retry(mocked_logger):
             MagicMock(status=200, text=AsyncMock(return_value=json.dumps({"data": tender_credentials_data}))),
         ]
     )
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        await prepare_contract_data(contract)
+    await prepare_contract_data(contract, session_mock)
 
     assert test_contract == contract
     assert mocked_logger.exception.call_count == 0
@@ -591,10 +579,9 @@ async def test_prepare_contract_data_retry_with_exception(mocked_logger):
             MagicMock(status=200, text=AsyncMock(return_value=json.dumps({"data": tender_credentials_data}))),
         ]
     )
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        with patch("prozorro_bridge_contracting.bridge.asyncio.sleep", AsyncMock()) as mocked_sleep:
-            with patch("prozorro_bridge_contracting.bridge.cache_db", AsyncMock()):
-                await prepare_contract_data(contract)
+    with patch("prozorro_bridge_contracting.bridge.asyncio.sleep", AsyncMock()) as mocked_sleep:
+        with patch("prozorro_bridge_contracting.bridge.cache_db", AsyncMock()):
+            await prepare_contract_data(contract, session_mock)
 
     mocked_logger.exception.assert_called_once_with(e)
     mocked_sleep.assert_called_once_with(5)
@@ -622,9 +609,8 @@ async def test_prepare_contract_data_with_exception(mocked_logger):
             MagicMock(status=200, text=AsyncMock(return_value=json.dumps({"data": tender_credentials_data}))),
         ]
     )
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        with patch("prozorro_bridge_contracting.bridge.asyncio.sleep", AsyncMock()) as mocked_sleep:
-            await prepare_contract_data(contract)
+    with patch("prozorro_bridge_contracting.bridge.asyncio.sleep", AsyncMock()) as mocked_sleep:
+        await prepare_contract_data(contract, session_mock)
 
     assert mocked_logger.exception.call_count == number_exceptions
     assert mocked_sleep.await_count == number_exceptions
@@ -653,9 +639,8 @@ async def test_get_tender_contracts_resource_gone(mocked_logger):
         ]
     )
 
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        with patch("prozorro_bridge_contracting.bridge.cache_db", mocked_db):
-            contracts = await get_tender_contracts(tender)
+    with patch("prozorro_bridge_contracting.bridge.cache_db", mocked_db):
+        contracts = await get_tender_contracts(tender, session_mock)
 
     logger_msg = f"Sync contract {contract_id} of tender {tender_id} has been archived"
     extra = journal_context(
@@ -678,9 +663,10 @@ async def test_get_tender_contracts_has_local(mocked_logger):
         "contracts": [{"id": contract_id, "status": "active"}],
     }
     mocked_db = AsyncMock()
+    session_mock = AsyncMock()
     mocked_db.has.return_value = True
     with patch("prozorro_bridge_contracting.bridge.cache_db", mocked_db):
-        contracts = await get_tender_contracts(tender)
+        contracts = await get_tender_contracts(tender, session_mock)
 
     logger_msg = f"Contract {contract_id} exists in local db"
     extra = journal_context(
@@ -711,9 +697,8 @@ async def test_get_tender_contracts_not_exists():
         ]
     )
 
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        with patch("prozorro_bridge_contracting.bridge.cache_db", mocked_db):
-            contracts = await get_tender_contracts(tender)
+    with patch("prozorro_bridge_contracting.bridge.cache_db", mocked_db):
+        contracts = await get_tender_contracts(tender, session_mock)
 
     session_mock.get.assert_called_once()
     assert contracts == [contract]
@@ -737,9 +722,8 @@ async def test_get_tender(mocked_logger):
             MagicMock(status=200, text=AsyncMock(return_value=json.dumps({"data": tender_data}))),
         ]
     )
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        with patch("prozorro_bridge_contracting.bridge.asyncio.sleep", AsyncMock()) as mocked_sleep:
-            tender = await get_tender(tender_data["id"])
+    with patch("prozorro_bridge_contracting.bridge.asyncio.sleep", AsyncMock()) as mocked_sleep:
+        tender = await get_tender(tender_data["id"], session_mock)
 
     assert mocked_logger.exception.call_count == 1
     assert mocked_sleep.await_count == 1
@@ -793,9 +777,8 @@ async def test_process_listing(mocked_logger):
         ]
     )
 
-    with patch("prozorro_bridge_contracting.bridge.SESSION", session_mock):
-        with patch("prozorro_bridge_contracting.bridge.cache_db", AsyncMock()):
-            await process_listing("", tender)
+    with patch("prozorro_bridge_contracting.bridge.cache_db", AsyncMock()):
+        await process_listing(session_mock, tender)
 
     extra = journal_context(
         {"MESSAGE_ID": DATABRIDGE_EXCEPTION},

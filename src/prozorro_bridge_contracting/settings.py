@@ -14,4 +14,10 @@ BASE_URL = f"{PUBLIC_API_HOST}/api/{API_VERSION}"
 API_TOKEN = os.environ.get("API_TOKEN", "contracting")
 USER_AGENT = os.environ.get("USER_AGENT", "Databridge contracting 2.0")
 
+HEADERS = {
+    "Content-Type": "application/json",
+    "Authorization": f"Bearer {API_TOKEN}",
+    "User-Agent": USER_AGENT,
+}
+
 LOGGER = logger
