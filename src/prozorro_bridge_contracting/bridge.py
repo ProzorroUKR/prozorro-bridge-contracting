@@ -275,4 +275,4 @@ async def process_listing(session: ClientSession, tender: dict) -> None:
     for contract in contracts:
         extend_contract(contract, tender_to_sync)
         await prepare_contract_data(contract, session)
-        await put_contract(contract, tender_to_sync["dateModified"])
+        await put_contract(contract, tender_to_sync["dateModified"], session)
