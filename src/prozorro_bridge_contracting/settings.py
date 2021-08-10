@@ -12,5 +12,6 @@ PUBLIC_API_HOST = os.environ.get("PUBLIC_API_HOST", "https://lb-api-sandbox-2.pr
 API_VERSION = os.environ.get("API_VERSION", "2.5")
 BASE_URL = f"{PUBLIC_API_HOST}/api/{API_VERSION}"
 API_TOKEN = os.environ.get("API_TOKEN", "contracting")
+USER_AGENT = os.environ.get("USER_AGENT", "Databridge contracting 2.0")
 
 LOGGER = logger

@@ -4,7 +4,7 @@ import json
 
 from prozorro_crawler.storage import get_feed_position
 from prozorro_bridge_contracting.db import Db
-from prozorro_bridge_contracting.settings import BASE_URL, LOGGER, API_TOKEN, ERROR_INTERVAL
+from prozorro_bridge_contracting.settings import BASE_URL, LOGGER, API_TOKEN, ERROR_INTERVAL, USER_AGENT
 from prozorro_bridge_contracting.utils import journal_context, extend_contract, check_tender
 from prozorro_bridge_contracting.journal_msg_ids import (
     DATABRIDGE_EXCEPTION,
@@ -42,7 +42,13 @@ async def sync_single_tender(tender_id: str) -> None:
                 continue
 
             LOGGER.info(f"Checking if contract {contract['id']} already exists")
-            response = await SESSION.get(f"{BASE_URL}/contracts/{contract['id']}")
+            response = await SESSION.get(
+                f"{BASE_URL}/contracts/{contract['id']}",
+                headers={
+                    "Content-Type": "application/json",
+                    "User-Agent": USER_AGENT,
+                },
+            )
             if response.status == 200:
                 LOGGER.info(f"Contract exists {contract['id']}")
                 continue
@@ -59,6 +65,7 @@ async def sync_single_tender(tender_id: str) -> None:
                 headers={
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {API_TOKEN}",
+                    "User-Agent": USER_AGENT,
                 },
             )
             data = await response.text()
@@ -98,6 +105,7 @@ async def get_tender_credentials(tender_id: str) -> dict:
                 url,
                 headers={
                     "Authorization": f"Bearer {API_TOKEN}",
+                    "User-Agent": USER_AGENT,
                 }
             )
             data = await response.text()
@@ -131,6 +139,7 @@ async def get_tender(tender_id: str) -> dict:
                 f"{BASE_URL}/tenders/{tender_id}",
                 headers={
                     "Authorization": f"Bearer {API_TOKEN}",
+                    "User-Agent": USER_AGENT,
                 }
             )
             data = await response.text()
@@ -174,7 +183,13 @@ async def _get_tender_contracts(tender_to_sync: dict) -> list:
                 await cache_db.put_tender_in_cache_by_contract(contract, tender_to_sync["dateModified"])
                 continue
 
-            response = await SESSION.get(f"{BASE_URL}/contracts/{contract['id']}")
+            response = await SESSION.get(
+                f"{BASE_URL}/contracts/{contract['id']}",
+                headers={
+                    "Content-Type": "application/json",
+                    "User-Agent": USER_AGENT,
+                },
+            )
             if response.status == 404:
                 LOGGER.info(
                     f"Sync contract {contract['id']} of tender {tender_to_sync['id']}",
@@ -256,6 +271,7 @@ async def put_contract(contract: dict, dateModified: str) -> None:
                 headers={
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {API_TOKEN}",
+                    "User-Agent": USER_AGENT,
                 },
             )
             data = await response.text()
