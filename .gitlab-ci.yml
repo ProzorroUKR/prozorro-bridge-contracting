@@ -61,6 +61,10 @@ review:
     - helm --debug upgrade ${CI_COMMIT_REF_SLUG}-contracting --install prozorro/prozorro-bridge-contracting --namespace dev-prozorro
           --set bridge_contracting.container.environment.PUBLIC_API_HOST=$API_HOST
           --wait
+  only:
+    - branches
+  except:
+    - master
   when: manual
 
 stop_review:
@@ -73,4 +77,8 @@ stop_review:
     action: stop
   tags:
     - shell
+  only:
+    - branches
+  except:
+    - master
   when: manual
