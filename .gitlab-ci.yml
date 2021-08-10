@@ -1,6 +1,7 @@
 stages:
   - test
   - build
+  - deploy
 
 variables:
   CI_TAG: ci-$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA
@@ -31,3 +32,45 @@ build:
     - tags
   dependencies:
     - test
+
+review:
+  stage: deploy
+  dependencies:
+    - build
+  tags:
+    - shell
+  environment:
+    name: review/${CI_COMMIT_REF_SLUG}
+    action: start
+    url: http://api.${CI_COMMIT_REF_SLUG}.${K8S_DOMAIN}/api/2.5/tenders
+    on_stop: stop_review
+    auto_stop_in: 1 day
+  variables:
+    API_TAG: "2.6.20"
+    TAG: $CI_COMMIT_REF_SLUG
+    API_HOST: http://api.${CI_COMMIT_REF_SLUG}.$K8S_DOMAIN
+  script:
+    - helm repo add prozorro $REPO_URL
+    - helm repo update
+    - helm --debug upgrade $CI_COMMIT_REF_SLUG --install prozorro/prozorro --namespace dev-prozorro
+          --set prozorro.api.image.tag=$API_TAG
+          --set deployAuctions=false
+          --set deployAuction=true
+          --set prozorro-bridges.bridges.contracting.deploy=false
+          --wait
+    - helm --debug upgrade ${CI_COMMIT_REF_SLUG}-contracting --install prozorro/prozorro-bridge-contracting --namespace dev-prozorro
+          --set bridge_contracting.container.environment.PUBLIC_API_HOST=$API_HOST
+          --wait
+  when: manual
+
+stop_review:
+  stage: deploy
+  script:
+    - helm delete $CI_COMMIT_REF_SLUG --purge
+    - helm delete $CI_COMMIT_REF_SLUG-contracting --purge
+  environment:
+    name: review/${CI_COMMIT_REF_SLUG}
+    action: stop
+  tags:
+    - shell
+  when: manual
