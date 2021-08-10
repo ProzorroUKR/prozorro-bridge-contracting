@@ -17,8 +17,13 @@ from prozorro_bridge_contracting.journal_msg_ids import (
     DATABRIDGE_CACHED,
 )
 
+headers = {
+    "Content-Type": "application/json",
+    "Authorization": f"Bearer {API_TOKEN}",
+    "User-Agent": USER_AGENT,
+}
 cache_db = Db()
-SESSION = ClientSession()
+SESSION = ClientSession(headers=headers)
 
 
 async def sync_single_tender(tender_id: str) -> None:
@@ -42,13 +47,7 @@ async def sync_single_tender(tender_id: str) -> None:
                 continue
 
             LOGGER.info(f"Checking if contract {contract['id']} already exists")
-            response = await SESSION.get(
-                f"{BASE_URL}/contracts/{contract['id']}",
-                headers={
-                    "Content-Type": "application/json",
-                    "User-Agent": USER_AGENT,
-                },
-            )
+            response = await SESSION.get(f"{BASE_URL}/contracts/{contract['id']}")
             if response.status == 200:
                 LOGGER.info(f"Contract exists {contract['id']}")
                 continue
@@ -59,15 +58,7 @@ async def sync_single_tender(tender_id: str) -> None:
             await prepare_contract_data(contract, tender_credentials)
 
             LOGGER.info(f"Creating contract {contract['id']}")
-            response = await SESSION.post(
-                f"{BASE_URL}/contracts/{contract['id']}",
-                json={"data": contract},
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {API_TOKEN}",
-                    "User-Agent": USER_AGENT,
-                },
-            )
+            response = await SESSION.post(f"{BASE_URL}/contracts/{contract['id']}", json={"data": contract})
             data = await response.text()
             if response.status == 422:
                 raise ValueError(data)
@@ -101,13 +92,7 @@ async def get_tender_credentials(tender_id: str) -> dict:
             ),
         )
         try:
-            response = await SESSION.get(
-                url,
-                headers={
-                    "Authorization": f"Bearer {API_TOKEN}",
-                    "User-Agent": USER_AGENT,
-                }
-            )
+            response = await SESSION.get(url)
             data = await response.text()
             if response.status == 200:
                 data = json.loads(data)
@@ -135,13 +120,7 @@ async def get_tender_credentials(tender_id: str) -> dict:
 async def get_tender(tender_id: str) -> dict:
     while True:
         try:
-            response = await SESSION.get(
-                f"{BASE_URL}/tenders/{tender_id}",
-                headers={
-                    "Authorization": f"Bearer {API_TOKEN}",
-                    "User-Agent": USER_AGENT,
-                }
-            )
+            response = await SESSION.get(f"{BASE_URL}/tenders/{tender_id}")
             data = await response.text()
             if response.status != 200:
                 raise ConnectionError(f"Error {data}")
@@ -183,13 +162,7 @@ async def _get_tender_contracts(tender_to_sync: dict) -> list:
                 await cache_db.put_tender_in_cache_by_contract(contract, tender_to_sync["dateModified"])
                 continue
 
-            response = await SESSION.get(
-                f"{BASE_URL}/contracts/{contract['id']}",
-                headers={
-                    "Content-Type": "application/json",
-                    "User-Agent": USER_AGENT,
-                },
-            )
+            response = await SESSION.get(f"{BASE_URL}/contracts/{contract['id']}")
             if response.status == 404:
                 LOGGER.info(
                     f"Sync contract {contract['id']} of tender {tender_to_sync['id']}",
@@ -265,15 +238,7 @@ async def put_contract(contract: dict, dateModified: str) -> None:
                     {"CONTRACT_ID": contract["id"], "TENDER_ID": contract["tender_id"]},
                 ),
             )
-            response = await SESSION.post(
-                f"{BASE_URL}/contracts",
-                json={"data": contract},
-                headers={
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {API_TOKEN}",
-                    "User-Agent": USER_AGENT,
-                },
-            )
+            response = await SESSION.post(f"{BASE_URL}/contracts", json={"data": contract})
             data = await response.text()
             if response.status == 422:
                 raise ValueError(data)
