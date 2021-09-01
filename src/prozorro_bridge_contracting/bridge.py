@@ -196,7 +196,7 @@ async def _get_tender_contracts(tender_to_sync: dict, session: ClientSession) ->
                         {"TENDER_ID": tender_to_sync["id"], "CONTRACT_ID": contract["id"]},
                     ),
                 )
-                await cache_db.put_tender_in_cache_by_contract(contract, tender_to_sync["dateModified"])
+                await cache_db.put_tender_in_cache_by_contract(tender_to_sync["id"], tender_to_sync["dateModified"])
                 continue
 
             contracts.append(contract)
