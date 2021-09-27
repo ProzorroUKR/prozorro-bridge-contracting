@@ -237,7 +237,11 @@ async def put_contract(contract: dict, dateModified: str, session: ClientSession
             response = await session.post(f"{BASE_URL}/contracts", json={"data": contract}, headers=HEADERS)
             data = await response.text()
             if response.status == 422:
-                raise ValueError(data)
+                LOGGER.error(
+                    f"ATTENTION! Unsuccessful put for contract {contract['id']} of tender {contract['tender_id']}. "
+                    f"This contract won't be processed. Response: {data}",
+                )
+                break
             elif response.status == (403, 410, 404, 405):
                 raise PermissionError(data)
             elif response.status != 201:
