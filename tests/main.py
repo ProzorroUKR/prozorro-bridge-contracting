@@ -490,7 +490,7 @@ async def test_sync_single_tender_Exception(mocked_logger):
 
 @pytest.mark.asyncio
 @patch("prozorro_bridge_contracting.bridge.LOGGER")
-async def test_retry_put_contracts(mocked_logger):
+async def test_retry_put_contracts_success(mocked_logger):
     contract = {"id": "42", "tender_id": "1984"}
     dateModified = datetime.now().isoformat()
     session_mock = AsyncMock()
@@ -509,6 +509,30 @@ async def test_retry_put_contracts(mocked_logger):
     mocked_db.put.assert_called_once_with(contract["id"], True)
     mocked_db.put_tender_in_cache_by_contract.assert_called_once_with(contract["tender_id"], dateModified)
     mocked_sleep.assert_called_once_with(5)
+
+
+@pytest.mark.asyncio
+@patch("prozorro_bridge_contracting.bridge.LOGGER")
+async def test_retry_put_contracts_fail(mocked_logger):
+    contract = {"id": "42", "tender_id": "1984"}
+    dateModified = datetime.now().isoformat()
+    session_mock = AsyncMock()
+    e = Exception("Test error")
+    side_effect = [
+        e,
+        MagicMock(status=422, text=AsyncMock(return_value=json.dumps({"error": "Failed"}))),
+        MagicMock(status=201, text=AsyncMock(return_value=json.dumps({"data": ["test1", "test2"]}))),
+    ]
+    session_mock.post = AsyncMock(side_effect=side_effect)
+    with patch("prozorro_bridge_contracting.bridge.asyncio.sleep", AsyncMock()) as mocked_sleep:
+        with patch("prozorro_bridge_contracting.bridge.cache_db", AsyncMock()) as mocked_db:
+            await put_contract(contract, dateModified, session_mock)
+
+    assert mocked_logger.exception.call_count == 1
+    assert mocked_logger.error.call_count == 1
+    mocked_db.put.assert_not_called()
+    mocked_db.put_tender_in_cache_by_contract.assert_not_called()
+    assert mocked_sleep.call_count == 1
 
 
 @pytest.mark.asyncio
