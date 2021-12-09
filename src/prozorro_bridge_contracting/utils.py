@@ -143,7 +143,7 @@ def check_tender(tender: dict) -> bool:
                     ),
                 )
                 return True
-        elif tender["status"] == "complete":
+        elif tender["status"] in ["complete", "active.awarded"]:
             LOGGER.info(
                 f"Found tender in complete status {tender['id']}",
                 extra=journal_context(
