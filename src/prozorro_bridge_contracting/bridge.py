@@ -146,60 +146,62 @@ async def _get_tender_contracts(tender_to_sync: dict, session: ClientSession) ->
         return []
 
     for contract in tender_to_sync.get("contracts", []):
-        if contract["status"] == "active":
-            if await cache_db.has(contract["id"]):
-                LOGGER.info(
-                    f"Contract {contract['id']} exists in local db",
-                    extra=journal_context(
-                        {"MESSAGE_ID": DATABRIDGE_CACHED},
-                        params={"CONTRACT_ID": contract["id"]}
-                    ),
-                )
-                await cache_db.put_tender_in_cache_by_contract(contract, tender_to_sync["dateModified"])
-                continue
+        if contract["status"] != "active":
+            continue
 
-            response = await session.get(f"{BASE_URL}/contracts/{contract['id']}", headers=HEADERS)
-            if response.status == 404:
-                LOGGER.info(
-                    f"Sync contract {contract['id']} of tender {tender_to_sync['id']}",
-                    extra=journal_context(
-                        {"MESSAGE_ID": DATABRIDGE_CONTRACT_TO_SYNC},
-                        {"CONTRACT_ID": contract["id"], "TENDER_ID": tender_to_sync["id"]},
-                    ),
-                )
-            elif response.status == 410:
-                LOGGER.info(
-                    f"Sync contract {contract['id']} of tender {tender_to_sync['id']} has been archived",
-                    extra=journal_context(
-                        {"MESSAGE_ID": DATABRIDGE_CONTRACT_TO_SYNC},
-                        {"CONTRACT_ID": contract["id"], "TENDER_ID": tender_to_sync["id"]},
-                    ),
-                )
-                continue
-            elif response.status != 200:
-                LOGGER.warning(
-                    f"Fail to contract existance {contract['id']}",
-                    extra=journal_context(
-                        {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
-                        params={"TENDER_ID": tender_to_sync["id"], "CONTRACT_ID": contract["id"]},
-                    ),
-                )
-                data = await response.text()
-                LOGGER.exception(data)
-                raise ConnectionError(f"Tender {tender_to_sync['id']} should be resynced")
-            else:
-                await cache_db.put(contract["id"], True)
-                LOGGER.info(
-                    f"Contract exists {contract['id']}",
-                    extra=journal_context(
-                        {"MESSAGE_ID": DATABRIDGE_CONTRACT_EXISTS},
-                        {"TENDER_ID": tender_to_sync["id"], "CONTRACT_ID": contract["id"]},
-                    ),
-                )
-                await cache_db.put_tender_in_cache_by_contract(tender_to_sync["id"], tender_to_sync["dateModified"])
-                continue
+        if await cache_db.has(contract["id"]):
+            LOGGER.info(
+                f"Contract {contract['id']} exists in local db",
+                extra=journal_context(
+                    {"MESSAGE_ID": DATABRIDGE_CACHED},
+                    params={"CONTRACT_ID": contract["id"]}
+                ),
+            )
+            await cache_db.put_tender_in_cache_by_contract(contract, tender_to_sync["dateModified"])
+            continue
 
-            contracts.append(contract)
+        response = await session.get(f"{BASE_URL}/contracts/{contract['id']}", headers=HEADERS)
+        if response.status == 404:
+            LOGGER.info(
+                f"Sync contract {contract['id']} of tender {tender_to_sync['id']}",
+                extra=journal_context(
+                    {"MESSAGE_ID": DATABRIDGE_CONTRACT_TO_SYNC},
+                    {"CONTRACT_ID": contract["id"], "TENDER_ID": tender_to_sync["id"]},
+                ),
+            )
+        elif response.status == 410:
+            LOGGER.info(
+                f"Sync contract {contract['id']} of tender {tender_to_sync['id']} has been archived",
+                extra=journal_context(
+                    {"MESSAGE_ID": DATABRIDGE_CONTRACT_TO_SYNC},
+                    {"CONTRACT_ID": contract["id"], "TENDER_ID": tender_to_sync["id"]},
+                ),
+            )
+            continue
+        elif response.status != 200:
+            LOGGER.warning(
+                f"Fail to contract existance {contract['id']}",
+                extra=journal_context(
+                    {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
+                    params={"TENDER_ID": tender_to_sync["id"], "CONTRACT_ID": contract["id"]},
+                ),
+            )
+            data = await response.text()
+            LOGGER.exception(data)
+            raise ConnectionError(f"Tender {tender_to_sync['id']} should be resynced")
+        else:
+            await cache_db.put(contract["id"], True)
+            LOGGER.info(
+                f"Contract exists {contract['id']}",
+                extra=journal_context(
+                    {"MESSAGE_ID": DATABRIDGE_CONTRACT_EXISTS},
+                    {"TENDER_ID": tender_to_sync["id"], "CONTRACT_ID": contract["id"]},
+                ),
+            )
+            await cache_db.put_tender_in_cache_by_contract(tender_to_sync["id"], tender_to_sync["dateModified"])
+            continue
+
+        contracts.append(contract)
     return contracts
 
 
@@ -240,6 +242,15 @@ async def put_contract(contract: dict, dateModified: str, session: ClientSession
                 LOGGER.error(
                     f"ATTENTION! Unsuccessful put for contract {contract['id']} of tender {contract['tender_id']}. "
                     f"This contract won't be processed. Response: {data}",
+                )
+                break
+            elif response.status == 409:
+                LOGGER.info(
+                    f"Contract {contract['id']} of tender {contract['tender_id']} already exists in db",
+                    extra=journal_context(
+                        {"MESSAGE_ID": DATABRIDGE_CONTRACT_EXISTS},
+                        {"CONTRACT_ID": contract["id"], "TENDER_ID": contract["tender_id"]},
+                    )
                 )
                 break
             elif response.status == (403, 410, 404, 405):
