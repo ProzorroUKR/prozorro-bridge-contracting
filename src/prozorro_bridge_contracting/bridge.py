@@ -100,16 +100,15 @@ async def get_tender_credentials(tender_id: str, session: ClientSession) -> dict
                     ),
                 )
                 return data
-            raise ConnectionError(f"Failed to get credentials {data}")
+            raise ConnectionError(data)
         except Exception as e:
             LOGGER.warning(
-                f"Can't get tender credentials {tender_id}",
+                f"Can't get tender credentials {tender_id}. Error message: {str(e)}",
                 extra=journal_context(
                     {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
                     {"TENDER_ID": tender_id}
                 ),
             )
-            LOGGER.exception(e)
             await asyncio.sleep(ERROR_INTERVAL)
 
 
@@ -119,24 +118,23 @@ async def get_tender(tender_id: str, session: ClientSession) -> dict:
             response = await session.get(f"{BASE_URL}/tenders/{tender_id}", headers=HEADERS)
             data = await response.text()
             if response.status != 200:
-                raise ConnectionError(f"Error {data}")
+                raise ConnectionError(data)
             return json.loads(data)["data"]
         except Exception as e:
             LOGGER.warning(
-                f"Fail to get tender {tender_id}",
+                f"Fail to get tender {tender_id}. Error message: {str(e)}",
                 extra=journal_context(
                     {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
                     params={"TENDER_ID": tender_id}
                 )
             )
-            LOGGER.exception(e)
             await asyncio.sleep(ERROR_INTERVAL)
 
 
 async def _get_tender_contracts(tender_to_sync: dict, session: ClientSession) -> list:
     contracts = []
     if "contracts" not in tender_to_sync:
-        LOGGER.warning(
+        LOGGER.info(
             f"No contracts found in tender {tender_to_sync['id']}",
             extra=journal_context(
                 {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
@@ -179,15 +177,14 @@ async def _get_tender_contracts(tender_to_sync: dict, session: ClientSession) ->
             )
             continue
         elif response.status != 200:
+            data = await response.text()
             LOGGER.warning(
-                f"Fail to contract existance {contract['id']}",
+                f"Fail to contract existance {contract['id']}. Error message: {str(data)}",
                 extra=journal_context(
                     {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
                     params={"TENDER_ID": tender_to_sync["id"], "CONTRACT_ID": contract["id"]},
                 ),
             )
-            data = await response.text()
-            LOGGER.exception(data)
             raise ConnectionError(f"Tender {tender_to_sync['id']} should be resynced")
         else:
             await cache_db.put(contract["id"], True)
@@ -210,11 +207,10 @@ async def get_tender_contracts(tender_to_sync: dict, session: ClientSession) -> 
         try:
             return await _get_tender_contracts(tender_to_sync, session)
         except Exception as e:
-            LOGGER.warn(
-                "Fail to handle tender contracts",
+            LOGGER.info(
+                f"Fail to handle tender contracts. Error message: {str(e)}",
                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_EXCEPTION})
                 )
-            LOGGER.exception(e)
             await asyncio.sleep(ERROR_INTERVAL)
 
 
@@ -269,14 +265,14 @@ async def put_contract(contract: dict, dateModified: str, session: ClientSession
             await cache_db.put_tender_in_cache_by_contract(contract["tender_id"], dateModified)
             break
         except Exception as e:
-            LOGGER.info(
-                f"Unsuccessful put for contract {contract['id']} of tender {contract['tender_id']}",
+            LOGGER.warning(
+                f"Unsuccessful put for contract {contract['id']} of tender {contract['tender_id']}. "
+                f"Error message: {str(e)}",
                 extra=journal_context(
                     {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
                     {"CONTRACT_ID": contract["id"], "TENDER_ID": contract["tender_id"]},
                 ),
             )
-            LOGGER.exception(e)
             await asyncio.sleep(ERROR_INTERVAL)
 
 
