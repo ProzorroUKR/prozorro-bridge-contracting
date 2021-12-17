@@ -33,8 +33,8 @@ async def test_get_tender_credentials(mocked_logger):
 
     assert session_mock.get.await_count == 2
     assert data == tender_data
-    assert mocked_logger.exception.call_count == 1
-    isinstance(mocked_logger.exception.call_args.args[0], ConnectionError)
+    assert mocked_logger.warning.call_count == 1
+    isinstance(mocked_logger.warning.call_args.args[0], ConnectionError)
     assert mocked_sleep.await_count == 1
 
 
@@ -505,7 +505,7 @@ async def test_retry_put_contracts_success(mocked_logger):
         with patch("prozorro_bridge_contracting.bridge.cache_db", AsyncMock()) as mocked_db:
             await put_contract(contract, dateModified, session_mock)
 
-    mocked_logger.exception.assert_called_once_with(e)
+    mocked_logger.warning.assert_called_once()
     mocked_db.put.assert_called_once_with(contract["id"], True)
     mocked_db.put_tender_in_cache_by_contract.assert_called_once_with(contract["tender_id"], dateModified)
     mocked_sleep.assert_called_once_with(5)
@@ -528,8 +528,7 @@ async def test_retry_put_contracts_fail(mocked_logger):
         with patch("prozorro_bridge_contracting.bridge.cache_db", AsyncMock()) as mocked_db:
             await put_contract(contract, dateModified, session_mock)
 
-    assert mocked_logger.exception.call_count == 1
-    assert mocked_logger.error.call_count == 1
+    assert mocked_logger.warning.call_count == 1
     mocked_db.put.assert_not_called()
     mocked_db.put_tender_in_cache_by_contract.assert_not_called()
     assert mocked_sleep.call_count == 1
@@ -555,7 +554,7 @@ async def test_put_contracts(mocked_logger):
 
     assert len(session_mock.post.await_args_list) == 10
     assert len(mocked_db.put.call_args_list) == 10
-    assert mocked_logger.exception.call_count == 0
+    assert mocked_logger.warning.call_count == 0
 
 
 
@@ -580,7 +579,7 @@ async def test_prepare_contract_data_retry(mocked_logger):
     await prepare_contract_data(contract, session_mock)
 
     assert test_contract == contract
-    assert mocked_logger.exception.call_count == 0
+    assert mocked_logger.warning.call_count == 0
 
 
 @pytest.mark.asyncio
@@ -607,7 +606,7 @@ async def test_prepare_contract_data_retry_with_exception(mocked_logger):
         with patch("prozorro_bridge_contracting.bridge.cache_db", AsyncMock()):
             await prepare_contract_data(contract, session_mock)
 
-    mocked_logger.exception.assert_called_once_with(e)
+    mocked_logger.warning.assert_called_once()
     mocked_sleep.assert_called_once_with(5)
     assert test_contract == contract
 
@@ -636,7 +635,7 @@ async def test_prepare_contract_data_with_exception(mocked_logger):
     with patch("prozorro_bridge_contracting.bridge.asyncio.sleep", AsyncMock()) as mocked_sleep:
         await prepare_contract_data(contract, session_mock)
 
-    assert mocked_logger.exception.call_count == number_exceptions
+    assert mocked_logger.warning.call_count == number_exceptions
     assert mocked_sleep.await_count == number_exceptions
     assert mocked_sleep.call_args_list == [call(5) for _ in range(number_exceptions)]
     assert session_mock.get.await_count == number_exceptions + 1
@@ -749,7 +748,7 @@ async def test_get_tender(mocked_logger):
     with patch("prozorro_bridge_contracting.bridge.asyncio.sleep", AsyncMock()) as mocked_sleep:
         tender = await get_tender(tender_data["id"], session_mock)
 
-    assert mocked_logger.exception.call_count == 1
+    assert mocked_logger.warning.call_count == 1
     assert mocked_sleep.await_count == 1
     assert session_mock.get.await_count == 2
     assert tender_data == tender
@@ -808,5 +807,5 @@ async def test_process_listing(mocked_logger):
         {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
         {"TENDER_ID": tender["id"]}
     )
-    mocked_logger.warning.assert_called_once_with(f"No contracts found in tender {tender['id']}", extra=extra)
+    mocked_logger.info.assert_called_once_with(f"No contracts found in tender {tender['id']}", extra=extra)
     assert session_mock.post.await_count == 0
