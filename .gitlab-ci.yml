@@ -70,8 +70,8 @@ review:
 stop_review:
   stage: deploy
   script:
-    - helm3 delete $CI_COMMIT_REF_SLUG --purge
-    - helm3 delete $CI_COMMIT_REF_SLUG-contracting --purge
+    - helm3 delete -n dev-prozorro $CI_COMMIT_REF_SLUG
+    - helm3 delete -n dev-prozorro $CI_COMMIT_REF_SLUG-contracting
   environment:
     name: review/${CI_COMMIT_REF_SLUG}
     action: stop

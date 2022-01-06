@@ -1,9 +1,12 @@
 from aiohttp import ClientSession
 import argparse
 import asyncio
+import sentry_sdk
+from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 from prozorro_crawler.main import main
 
 from prozorro_bridge_contracting.bridge import process_listing, sync_single_tender
+from prozorro_bridge_contracting.settings import SENTRY_DSN
 
 
 async def data_handler(session: ClientSession, items: list) -> None:
@@ -18,6 +21,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Contracting Data Bridge")
     parser.add_argument("--tender", type=str, help="Tender id to sync", dest="tender_id")
     params = parser.parse_args()
+    if SENTRY_DSN:
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            integrations=[AioHttpIntegration()]
+        )
     if params.tender_id:
         loop = asyncio.get_event_loop()
         loop.run_until_complete(sync_single_tender(tender_id=params.tender_id))

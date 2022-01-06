@@ -100,16 +100,15 @@ async def get_tender_credentials(tender_id: str, session: ClientSession) -> dict
                     ),
                 )
                 return data
-            raise ConnectionError(f"Failed to get credentials {data}")
+            raise ConnectionError(data)
         except Exception as e:
             LOGGER.warning(
-                f"Can't get tender credentials {tender_id}",
+                f"Can't get tender credentials {tender_id}. Error message: {str(e)}",
                 extra=journal_context(
                     {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
                     {"TENDER_ID": tender_id}
                 ),
             )
-            LOGGER.exception(e)
             await asyncio.sleep(ERROR_INTERVAL)
 
 
@@ -119,24 +118,23 @@ async def get_tender(tender_id: str, session: ClientSession) -> dict:
             response = await session.get(f"{BASE_URL}/tenders/{tender_id}", headers=HEADERS)
             data = await response.text()
             if response.status != 200:
-                raise ConnectionError(f"Error {data}")
+                raise ConnectionError(data)
             return json.loads(data)["data"]
         except Exception as e:
             LOGGER.warning(
-                f"Fail to get tender {tender_id}",
+                f"Fail to get tender {tender_id}. Error message: {str(e)}",
                 extra=journal_context(
                     {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
                     params={"TENDER_ID": tender_id}
                 )
             )
-            LOGGER.exception(e)
             await asyncio.sleep(ERROR_INTERVAL)
 
 
 async def _get_tender_contracts(tender_to_sync: dict, session: ClientSession) -> list:
     contracts = []
     if "contracts" not in tender_to_sync:
-        LOGGER.warning(
+        LOGGER.info(
             f"No contracts found in tender {tender_to_sync['id']}",
             extra=journal_context(
                 {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
@@ -146,60 +144,61 @@ async def _get_tender_contracts(tender_to_sync: dict, session: ClientSession) ->
         return []
 
     for contract in tender_to_sync.get("contracts", []):
-        if contract["status"] == "active":
-            if await cache_db.has(contract["id"]):
-                LOGGER.info(
-                    f"Contract {contract['id']} exists in local db",
-                    extra=journal_context(
-                        {"MESSAGE_ID": DATABRIDGE_CACHED},
-                        params={"CONTRACT_ID": contract["id"]}
-                    ),
-                )
-                await cache_db.put_tender_in_cache_by_contract(contract, tender_to_sync["dateModified"])
-                continue
+        if contract["status"] != "active":
+            continue
 
-            response = await session.get(f"{BASE_URL}/contracts/{contract['id']}", headers=HEADERS)
-            if response.status == 404:
-                LOGGER.info(
-                    f"Sync contract {contract['id']} of tender {tender_to_sync['id']}",
-                    extra=journal_context(
-                        {"MESSAGE_ID": DATABRIDGE_CONTRACT_TO_SYNC},
-                        {"CONTRACT_ID": contract["id"], "TENDER_ID": tender_to_sync["id"]},
-                    ),
-                )
-            elif response.status == 410:
-                LOGGER.info(
-                    f"Sync contract {contract['id']} of tender {tender_to_sync['id']} has been archived",
-                    extra=journal_context(
-                        {"MESSAGE_ID": DATABRIDGE_CONTRACT_TO_SYNC},
-                        {"CONTRACT_ID": contract["id"], "TENDER_ID": tender_to_sync["id"]},
-                    ),
-                )
-                continue
-            elif response.status != 200:
-                LOGGER.warning(
-                    f"Fail to contract existance {contract['id']}",
-                    extra=journal_context(
-                        {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
-                        params={"TENDER_ID": tender_to_sync["id"], "CONTRACT_ID": contract["id"]},
-                    ),
-                )
-                data = await response.text()
-                LOGGER.exception(data)
-                raise ConnectionError(f"Tender {tender_to_sync['id']} should be resynced")
-            else:
-                await cache_db.put(contract["id"], True)
-                LOGGER.info(
-                    f"Contract exists {contract['id']}",
-                    extra=journal_context(
-                        {"MESSAGE_ID": DATABRIDGE_CONTRACT_EXISTS},
-                        {"TENDER_ID": tender_to_sync["id"], "CONTRACT_ID": contract["id"]},
-                    ),
-                )
-                await cache_db.put_tender_in_cache_by_contract(tender_to_sync["id"], tender_to_sync["dateModified"])
-                continue
+        if await cache_db.has(contract["id"]):
+            LOGGER.info(
+                f"Contract {contract['id']} exists in local db",
+                extra=journal_context(
+                    {"MESSAGE_ID": DATABRIDGE_CACHED},
+                    params={"CONTRACT_ID": contract["id"]}
+                ),
+            )
+            await cache_db.put_tender_in_cache_by_contract(contract, tender_to_sync["dateModified"])
+            continue
 
-            contracts.append(contract)
+        response = await session.get(f"{BASE_URL}/contracts/{contract['id']}", headers=HEADERS)
+        if response.status == 404:
+            LOGGER.info(
+                f"Sync contract {contract['id']} of tender {tender_to_sync['id']}",
+                extra=journal_context(
+                    {"MESSAGE_ID": DATABRIDGE_CONTRACT_TO_SYNC},
+                    {"CONTRACT_ID": contract["id"], "TENDER_ID": tender_to_sync["id"]},
+                ),
+            )
+        elif response.status == 410:
+            LOGGER.info(
+                f"Sync contract {contract['id']} of tender {tender_to_sync['id']} has been archived",
+                extra=journal_context(
+                    {"MESSAGE_ID": DATABRIDGE_CONTRACT_TO_SYNC},
+                    {"CONTRACT_ID": contract["id"], "TENDER_ID": tender_to_sync["id"]},
+                ),
+            )
+            continue
+        elif response.status != 200:
+            data = await response.text()
+            LOGGER.warning(
+                f"Fail to contract existance {contract['id']}. Error message: {str(data)}",
+                extra=journal_context(
+                    {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
+                    params={"TENDER_ID": tender_to_sync["id"], "CONTRACT_ID": contract["id"]},
+                ),
+            )
+            raise ConnectionError(f"Tender {tender_to_sync['id']} should be resynced")
+        else:
+            await cache_db.put(contract["id"], True)
+            LOGGER.info(
+                f"Contract exists {contract['id']}",
+                extra=journal_context(
+                    {"MESSAGE_ID": DATABRIDGE_CONTRACT_EXISTS},
+                    {"TENDER_ID": tender_to_sync["id"], "CONTRACT_ID": contract["id"]},
+                ),
+            )
+            await cache_db.put_tender_in_cache_by_contract(tender_to_sync["id"], tender_to_sync["dateModified"])
+            continue
+
+        contracts.append(contract)
     return contracts
 
 
@@ -208,11 +207,10 @@ async def get_tender_contracts(tender_to_sync: dict, session: ClientSession) -> 
         try:
             return await _get_tender_contracts(tender_to_sync, session)
         except Exception as e:
-            LOGGER.warn(
-                "Fail to handle tender contracts",
+            LOGGER.info(
+                f"Fail to handle tender contracts. Error message: {str(e)}",
                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_EXCEPTION})
                 )
-            LOGGER.exception(e)
             await asyncio.sleep(ERROR_INTERVAL)
 
 
@@ -242,6 +240,15 @@ async def put_contract(contract: dict, dateModified: str, session: ClientSession
                     f"This contract won't be processed. Response: {data}",
                 )
                 break
+            elif response.status == 409:
+                LOGGER.info(
+                    f"Contract {contract['id']} of tender {contract['tender_id']} already exists in db",
+                    extra=journal_context(
+                        {"MESSAGE_ID": DATABRIDGE_CONTRACT_EXISTS},
+                        {"CONTRACT_ID": contract["id"], "TENDER_ID": contract["tender_id"]},
+                    )
+                )
+                break
             elif response.status == (403, 410, 404, 405):
                 raise PermissionError(data)
             elif response.status != 201:
@@ -258,14 +265,14 @@ async def put_contract(contract: dict, dateModified: str, session: ClientSession
             await cache_db.put_tender_in_cache_by_contract(contract["tender_id"], dateModified)
             break
         except Exception as e:
-            LOGGER.info(
-                f"Unsuccessful put for contract {contract['id']} of tender {contract['tender_id']}",
+            LOGGER.warning(
+                f"Unsuccessful put for contract {contract['id']} of tender {contract['tender_id']}. "
+                f"Error message: {str(e)}",
                 extra=journal_context(
                     {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
                     {"CONTRACT_ID": contract["id"], "TENDER_ID": contract["tender_id"]},
                 ),
             )
-            LOGGER.exception(e)
             await asyncio.sleep(ERROR_INTERVAL)
 
 

@@ -152,7 +152,7 @@ def check_tender(tender: dict) -> bool:
                 ),
             )
             return True
-    LOGGER.info(
+    LOGGER.debug(
         f"Skipping tender {tender['id']} in status {tender['status']}",
         extra=journal_context(
             {"MESSAGE_ID": DATABRIDGE_INFO},
