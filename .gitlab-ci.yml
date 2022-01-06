@@ -60,7 +60,7 @@ review:
           --wait
     - helm3 --debug upgrade ${CI_COMMIT_REF_SLUG}-contracting --install prozorro/prozorro-bridge-contracting --namespace dev-prozorro
           --set bridge_contracting.container.environment.PUBLIC_API_HOST=$API_HOST
-          --wait
+          --set bridge_contracting.image.tag=$TAG
   only:
     - branches
   except:
