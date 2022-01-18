@@ -134,7 +134,7 @@ def check_tender(tender: dict) -> bool:
             and tender["procurementMethodType"] not in ("competitiveDialogueUA", "competitiveDialogueEU", "esco")
     ):
         if "lots" in tender:
-            if any(lot["status"] == "complete" for lot in tender["lots"]):
+            if any(lot["status"] in ["active", "complete"] for lot in tender["lots"]):
                 LOGGER.info(
                     f"Found multilot tender {tender['id']} in status {tender['status']}",
                     extra=journal_context(
