@@ -4,7 +4,7 @@ pymongo==3.11.3
 pytest==6.1.2
 pytest-asyncio==0.15.1
 sentry-sdk
-git+https://github.com/ProzorroUKR/prozorro_crawler.git@2.0.4#egg=prozorro_crawler
+git+https://github.com/ProzorroUKR/prozorro_crawler.git@2.0.5#egg=prozorro_crawler
 
 async-timeout==3.0.1
 attrs==21.2.0
