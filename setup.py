@@ -2,7 +2,7 @@ import os
 from setuptools import setup, find_packages
 
 requires = []
-version = "1.0.6"
+version = "1.0.8"
 
 with open(os.path.join(os.path.dirname(__file__), "requirements.txt"), "r") as f:
     for resource in f.readlines():
