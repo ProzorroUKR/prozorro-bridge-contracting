@@ -13,7 +13,7 @@ from prozorro_bridge_contracting.settings import (
 )
 
 
-def retry_decorator(log_message: str = None) -> Callable:
+def retry_decorator(error_message: str = None) -> Callable:
     def outer(func: Callable) -> Callable:
         async def inner(*args, **kwargs) -> None:
             while True:
@@ -21,7 +21,10 @@ def retry_decorator(log_message: str = None) -> Callable:
                     await func(*args, **kwargs)
                     break
                 except PyMongoError as e:
-                    LOGGER.warning({"message": log_message, "error": e}, extra={"MESSAGE_ID": MONGODB_EXCEPTION})
+                    LOGGER.warning(
+                        {"message": f"{error_message}: {e}"},
+                        extra={"MESSAGE_ID": MONGODB_EXCEPTION},
+                    )
                     await asyncio.sleep(ERROR_INTERVAL)
         return inner
     return outer
@@ -33,11 +36,11 @@ class Db:
         self.db = getattr(self.client, MONGODB_DATABASE)
         self.collection = getattr(self.db, MONGODB_CONTRACTS_COLLECTION)
 
-    @retry_decorator(log_message="Get item from contracts")
+    @retry_decorator(error_message="Get item from cache collection error")
     async def get(self, key: str) -> dict:
         return await self.collection.find_one({"_id": key})
 
-    @retry_decorator(log_message="Put item in contracts")
+    @retry_decorator(error_message="Put item in cache collection error")
     async def put(self, key: str, value) -> None:
         await self.collection.update_one(
             {"_id": key},
@@ -45,19 +48,17 @@ class Db:
             upsert=True
         )
 
-    @retry_decorator(log_message="Exists in contracts")
+    @retry_decorator(error_message="Exists in cache collection error")
     async def has(self, key: str) -> bool:
         value = await self.collection.find_one({"_id": key})
         return value is not None
 
-    @retry_decorator(log_message="get_tender_contracts_fb")
     async def get_tender_contracts_fb(self, tender: dict) -> bool:
         stored = await self.get(tender["id"])
         if stored and stored.get("value", None) == tender["dateModified"]:
             return False
         return True
 
-    @retry_decorator(log_message="put_tender_in_cache_by_contract")
     async def put_tender_in_cache_by_contract(self, tender_id: str, dateModified: str = None) -> None:
         if dateModified:
             await self.put(tender_id, dateModified)
