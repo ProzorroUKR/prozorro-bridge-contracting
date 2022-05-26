@@ -103,7 +103,7 @@ async def get_tender_credentials(tender_id: str, session: ClientSession) -> dict
             raise ConnectionError(data)
         except Exception as e:
             LOGGER.warning(
-                f"Can't get tender credentials {tender_id}. Error message: {str(e)}",
+                f"Can't get tender credentials {tender_id}. Exception: {type(e)} {e}",
                 extra=journal_context(
                     {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
                     {"TENDER_ID": tender_id}
@@ -122,7 +122,7 @@ async def get_tender(tender_id: str, session: ClientSession) -> dict:
             return json.loads(data)["data"]
         except Exception as e:
             LOGGER.warning(
-                f"Fail to get tender {tender_id}. Error message: {str(e)}",
+                f"Fail to get tender {tender_id}. Exception: {type(e)} {e}",
                 extra=journal_context(
                     {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
                     params={"TENDER_ID": tender_id}
@@ -179,7 +179,7 @@ async def _get_tender_contracts(tender_to_sync: dict, session: ClientSession) ->
         elif response.status != 200:
             data = await response.text()
             LOGGER.warning(
-                f"Fail to contract existance {contract['id']}. Error message: {str(data)}",
+                f"Fail to contract existence {contract['id']}. Error message: {str(data)}",
                 extra=journal_context(
                     {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
                     params={"TENDER_ID": tender_to_sync["id"], "CONTRACT_ID": contract["id"]},
@@ -208,7 +208,7 @@ async def get_tender_contracts(tender_to_sync: dict, session: ClientSession) -> 
             return await _get_tender_contracts(tender_to_sync, session)
         except Exception as e:
             LOGGER.info(
-                f"Fail to handle tender contracts. Error message: {str(e)}",
+                f"Fail to handle tender contracts. Exception: {type(e)} {e}",
                 extra=journal_context({"MESSAGE_ID": DATABRIDGE_EXCEPTION})
                 )
             await asyncio.sleep(ERROR_INTERVAL)
@@ -267,7 +267,7 @@ async def put_contract(contract: dict, dateModified: str, session: ClientSession
         except Exception as e:
             LOGGER.warning(
                 f"Unsuccessful put for contract {contract['id']} of tender {contract['tender_id']}. "
-                f"Error message: {str(e)}",
+                f"Exception: {type(e)} {e}",
                 extra=journal_context(
                     {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
                     {"CONTRACT_ID": contract["id"], "TENDER_ID": contract["tender_id"]},
