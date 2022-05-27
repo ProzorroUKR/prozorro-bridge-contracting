@@ -129,9 +129,10 @@ def extend_contract(contract: dict, tender: dict) -> None:
 
 
 def check_tender(tender: dict) -> bool:
+    LOGGER.debug(f"Checking tender from feed: {repr(tender)}")
     if (
-            tender["status"] in ("active.qualification", "active", "active.awarded", "complete")
-            and tender["procurementMethodType"] not in ("competitiveDialogueUA", "competitiveDialogueEU", "esco")
+        tender["status"] in ("active.qualification", "active", "active.awarded", "complete")
+        and tender["procurementMethodType"] not in ("competitiveDialogueUA", "competitiveDialogueEU", "esco")
     ):
         if "lots" in tender:
             if any(lot["status"] in ["active", "complete"] for lot in tender["lots"]):

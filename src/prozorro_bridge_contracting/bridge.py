@@ -120,7 +120,9 @@ async def get_tender(tender_id: str, session: ClientSession) -> dict:
             data = await response.text()
             if response.status != 200:
                 raise ConnectionError(data)
-            return json.loads(data)["data"]
+            tender = json.loads(data)["data"]
+            LOGGER.debug(f"Got tender {tender_id} from api: {repr(tender)}")
+            return tender
         except Exception as e:
             LOGGER.warning(
                 f"Fail to get tender {tender_id}. Exception: {type(e)} {e}",
