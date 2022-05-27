@@ -10,10 +10,12 @@ from prozorro_bridge_contracting.bridge import (
     get_tender_credentials,
     get_tender,
     get_tender_contracts,
-    put_contract,
+    post_contract,
     sync_single_tender,
     prepare_contract_data,
-    process_listing,
+    process_listing, 
+    HEADERS,
+    BASE_URL,
 )
 
 
@@ -490,9 +492,8 @@ async def test_sync_single_tender_Exception(mocked_logger):
 
 @pytest.mark.asyncio
 @patch("prozorro_bridge_contracting.bridge.LOGGER")
-async def test_retry_put_contracts_success(mocked_logger):
+async def test_retry_post_contracts_success(mocked_logger):
     contract = {"id": "42", "tender_id": "1984"}
-    dateModified = datetime.now().isoformat()
     session_mock = AsyncMock()
     e = Exception("Test error")
     side_effect = [
@@ -502,20 +503,18 @@ async def test_retry_put_contracts_success(mocked_logger):
     session_mock.post = AsyncMock(side_effect=side_effect)
 
     with patch("prozorro_bridge_contracting.bridge.asyncio.sleep", AsyncMock()) as mocked_sleep:
-        with patch("prozorro_bridge_contracting.bridge.cache_db", AsyncMock()) as mocked_db:
-            await put_contract(contract, dateModified, session_mock)
+        await post_contract(contract, session_mock)
 
+    post_call = call(f"{BASE_URL}/contracts", json={'data': contract}, headers=HEADERS)
+    session_mock.mock_calls = [post_call] * 2
     mocked_logger.warning.assert_called_once()
-    mocked_db.put.assert_called_once_with(contract["id"], True)
-    mocked_db.put_tender_in_cache_by_contract.assert_called_once_with(contract["tender_id"], dateModified)
     mocked_sleep.assert_called_once_with(5)
 
 
 @pytest.mark.asyncio
 @patch("prozorro_bridge_contracting.bridge.LOGGER")
-async def test_retry_put_contracts_fail(mocked_logger):
+async def test_retry_post_contracts_fail(mocked_logger):
     contract = {"id": "42", "tender_id": "1984"}
-    dateModified = datetime.now().isoformat()
     session_mock = AsyncMock()
     e = Exception("Test error")
     side_effect = [
@@ -525,18 +524,18 @@ async def test_retry_put_contracts_fail(mocked_logger):
     ]
     session_mock.post = AsyncMock(side_effect=side_effect)
     with patch("prozorro_bridge_contracting.bridge.asyncio.sleep", AsyncMock()) as mocked_sleep:
-        with patch("prozorro_bridge_contracting.bridge.cache_db", AsyncMock()) as mocked_db:
-            await put_contract(contract, dateModified, session_mock)
+        await post_contract(contract, session_mock)
+
+    post_call = call(f"{BASE_URL}/contracts", json={'data': contract}, headers=HEADERS)
+    session_mock.mock_calls = [post_call] * 3
 
     assert mocked_logger.warning.call_count == 1
-    mocked_db.put.assert_not_called()
-    mocked_db.put_tender_in_cache_by_contract.assert_not_called()
     assert mocked_sleep.call_count == 1
 
 
 @pytest.mark.asyncio
 @patch("prozorro_bridge_contracting.bridge.LOGGER")
-async def test_put_contracts(mocked_logger):
+async def test_post_contracts(mocked_logger):
     list_contracts = []
     side_effect = []
     for i in range(0, 10):
@@ -544,16 +543,13 @@ async def test_put_contracts(mocked_logger):
         side_effect.append(
             MagicMock(status=201, text=AsyncMock(return_value=json.dumps({"data": ["test1", "test2"]}))),
         )
-    dateModified = datetime.now().isoformat()
     session_mock = AsyncMock()
     session_mock.post = AsyncMock(side_effect=side_effect)
 
-    with patch("prozorro_bridge_contracting.bridge.cache_db", AsyncMock()) as mocked_db:
-        for contract in list_contracts:
-            await put_contract(contract, dateModified, session_mock)
+    for contract in list_contracts:
+        await post_contract(contract, session_mock)
 
     assert len(session_mock.post.await_args_list) == 10
-    assert len(mocked_db.put.call_args_list) == 10
     assert mocked_logger.warning.call_count == 0
 
 
@@ -603,8 +599,7 @@ async def test_prepare_contract_data_retry_with_exception(mocked_logger):
         ]
     )
     with patch("prozorro_bridge_contracting.bridge.asyncio.sleep", AsyncMock()) as mocked_sleep:
-        with patch("prozorro_bridge_contracting.bridge.cache_db", AsyncMock()):
-            await prepare_contract_data(contract, session_mock)
+        await prepare_contract_data(contract, session_mock)
 
     mocked_logger.warning.assert_called_once()
     mocked_sleep.assert_called_once_with(5)
@@ -653,8 +648,6 @@ async def test_get_tender_contracts_resource_gone(mocked_logger):
         "dateModified": datetime.now().isoformat(),
         "contracts": [{"id": contract_id, "status": "active"}],
     }
-    mocked_db = AsyncMock()
-    mocked_db.has.return_value = False
     session_mock = AsyncMock()
     session_mock.get = AsyncMock(
         side_effect=[
@@ -662,8 +655,7 @@ async def test_get_tender_contracts_resource_gone(mocked_logger):
         ]
     )
 
-    with patch("prozorro_bridge_contracting.bridge.cache_db", mocked_db):
-        contracts = await get_tender_contracts(tender, session_mock)
+    contracts = await get_tender_contracts(tender, session_mock)
 
     logger_msg = f"Sync contract {contract_id} of tender {tender_id} has been archived"
     extra = journal_context(
@@ -671,33 +663,6 @@ async def test_get_tender_contracts_resource_gone(mocked_logger):
         {"CONTRACT_ID": contract_id, "TENDER_ID": tender_id},
     )
     mocked_logger.info.assert_called_once_with(logger_msg, extra=extra)
-    assert contracts == []
-    assert mocked_db.method_calls == [call.has(contract_id)]
-
-
-@pytest.mark.asyncio
-@patch("prozorro_bridge_contracting.bridge.LOGGER")
-async def test_get_tender_contracts_has_local(mocked_logger):
-    tender_id = "1" * 32
-    contract_id = "2" * 32
-    tender = {
-        "id": tender_id,
-        "dateModified": datetime.now().isoformat(),
-        "contracts": [{"id": contract_id, "status": "active"}],
-    }
-    mocked_db = AsyncMock()
-    session_mock = AsyncMock()
-    mocked_db.has.return_value = True
-    with patch("prozorro_bridge_contracting.bridge.cache_db", mocked_db):
-        contracts = await get_tender_contracts(tender, session_mock)
-
-    logger_msg = f"Contract {contract_id} exists in local db"
-    extra = journal_context(
-        {"MESSAGE_ID": DATABRIDGE_CACHED},
-        {"CONTRACT_ID": contract_id},
-    )
-    mocked_logger.info.assert_called_once_with(logger_msg, extra=extra)
-    mocked_db.has.assert_called_once_with(contract_id)
     assert contracts == []
 
 
@@ -720,8 +685,7 @@ async def test_get_tender_contracts_not_exists():
         ]
     )
 
-    with patch("prozorro_bridge_contracting.bridge.cache_db", mocked_db):
-        contracts = await get_tender_contracts(tender, session_mock)
+    contracts = await get_tender_contracts(tender, session_mock)
 
     session_mock.get.assert_called_once()
     assert contracts == [contract]
@@ -800,8 +764,7 @@ async def test_process_listing(mocked_logger):
         ]
     )
 
-    with patch("prozorro_bridge_contracting.bridge.cache_db", AsyncMock()):
-        await process_listing(session_mock, tender)
+    await process_listing(session_mock, tender)
 
     extra = journal_context(
         {"MESSAGE_ID": DATABRIDGE_EXCEPTION},
