@@ -15,6 +15,7 @@ from prozorro_bridge_contracting.journal_msg_ids import (
     DATABRIDGE_CREATE_CONTRACT,
     DATABRIDGE_CONTRACT_CREATED,
     DATABRIDGE_CACHED,
+    DATABRIDGE_INFO,
 )
 
 cache_db = Db()
@@ -145,6 +146,16 @@ async def _get_tender_contracts(tender_to_sync: dict, session: ClientSession) ->
 
     for contract in tender_to_sync.get("contracts", []):
         if contract["status"] != "active":
+            LOGGER.debug(
+                f"Skipping contract {contract['id']} of tender {tender_to_sync['id']} in status {contract['status']}",
+                extra=journal_context(
+                    {"MESSAGE_ID": DATABRIDGE_INFO},
+                    params={
+                        "TENDER_ID": tender_to_sync["id"],
+                        "CONTRACT_ID": contract["id"],
+                    }
+                ),
+            )
             continue
 
         if await cache_db.has(contract["id"]):
