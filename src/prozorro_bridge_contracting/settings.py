@@ -10,4 +10,6 @@ API_TOKEN = os.environ.get("API_TOKEN", "contracting")
 
 ERROR_INTERVAL = int(os.environ.get("ERROR_INTERVAL", 5))
 
+JOURNAL_PREFIX = os.environ.get("JOURNAL_PREFIX", "JOURNAL_")
+
 SENTRY_DSN = os.getenv("SENTRY_DSN")
