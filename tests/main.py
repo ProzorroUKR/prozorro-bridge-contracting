@@ -418,7 +418,7 @@ async def test_get_tender_contracts_resource_gone(mocked_logger):
         "contracts": [{"id": contract_id, "status": "active"}],
     }
     session_mock = AsyncMock()
-    session_mock.get = AsyncMock(
+    session_mock.head = AsyncMock(
         side_effect=[
             MagicMock(status=410, text=AsyncMock(return_value=json.dumps({"status": "error"}))),
         ]
@@ -446,7 +446,7 @@ async def test_get_tender_contracts_not_exists():
         "contracts": [contract],
     }
     session_mock = AsyncMock()
-    session_mock.get = AsyncMock(
+    session_mock.head = AsyncMock(
         side_effect=[
             MagicMock(status=404, text=AsyncMock(return_value=json.dumps({"error": "Not found"}))),
         ]
@@ -454,7 +454,7 @@ async def test_get_tender_contracts_not_exists():
 
     contracts = await get_tender_contracts(tender, session_mock)
 
-    session_mock.get.assert_called_once()
+    session_mock.head.assert_called_once()
     assert contracts == [contract]
 
 
@@ -602,9 +602,13 @@ async def test_process_listing(mocked_logger):
     }
     session_mock = AsyncMock()
     session_mock.cookie_jar = MagicMock()
-    session_mock.get = AsyncMock(
+    session_mock.head = AsyncMock(
         side_effect=[
             MagicMock(status=404),
+        ]
+    )
+    session_mock.get = AsyncMock(
+        side_effect=[
             MagicMock(status=200, text=AsyncMock(return_value=json.dumps({"data": tender_credentials_data}))),
         ]
     )

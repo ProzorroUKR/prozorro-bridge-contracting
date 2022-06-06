@@ -132,7 +132,7 @@ async def get_tender_contracts(tender: dict, session: ClientSession) -> list:
                     )
                     continue
 
-                response = await session.get(f"{BASE_URL}/contracts/{contract['id']}", headers=HEADERS)
+                response = await session.head(f"{BASE_URL}/contracts/{contract['id']}", headers=HEADERS)
                 if response.status == 404:
                     LOGGER.info(
                         f"Sync contract {contract['id']} of tender {tender['id']}",
