@@ -34,7 +34,7 @@ def check_tender(tender: dict) -> bool:
     if tender["procurementMethodType"] in ("competitiveDialogueUA", "competitiveDialogueEU", "esco"):
         return False
 
-    if any([contract["status"] == "active" for contract in tender.get("contracts", [])]):
+    if any(contract["status"] == "active" for contract in tender.get("contracts", [])):
         LOGGER.info(
             f"Found tender {tender['id']} with active contracts",
             extra=journal_context(
@@ -113,11 +113,9 @@ async def get_tender_credentials(tender_id: str, session: ClientSession) -> dict
             await asyncio.sleep(ERROR_INTERVAL)
 
 
-async def get_tender_contracts(tender: dict, session: ClientSession) -> list:
+async def process_tender_contracts(tender: dict, session: ClientSession) -> list:
     while True:
         try:
-            contracts = []
-
             for contract in tender.get("contracts", []):
                 if contract["status"] != "active":
                     LOGGER.debug(
@@ -141,15 +139,9 @@ async def get_tender_contracts(tender: dict, session: ClientSession) -> list:
                             {"CONTRACT_ID": contract["id"], "TENDER_ID": tender["id"]},
                         ),
                     )
-                elif response.status == 410:
-                    LOGGER.info(
-                        f"Sync contract {contract['id']} of tender {tender['id']} has been archived",
-                        extra=journal_context(
-                            {"MESSAGE_ID": DATABRIDGE_CONTRACT_TO_SYNC},
-                            {"CONTRACT_ID": contract["id"], "TENDER_ID": tender["id"]},
-                        ),
-                    )
-                    continue
+                    extend_contract(contract, tender)
+                    await prepare_contract_data(contract, session)
+                    await post_contract(contract, session)
                 elif response.status != 200:
                     data = await response.text()
                     LOGGER.warning(
@@ -169,9 +161,7 @@ async def get_tender_contracts(tender: dict, session: ClientSession) -> list:
                         ),
                     )
                     continue
-
-                contracts.append(contract)
-            return contracts
+            break
         except Exception as e:
             LOGGER.info(
                 f"Fail to handle tender contracts. Exception: {type(e)} {e}",
@@ -199,14 +189,17 @@ async def post_contract(contract: dict, session: ClientSession) -> None:
                 ),
             )
             response = await session.post(f"{BASE_URL}/contracts", json={"data": contract}, headers=HEADERS)
-            data = await response.text()
             if response.status == 422:
+                data = await response.text()
                 LOGGER.error(
                     f"ATTENTION! Unsuccessful put for contract {contract['id']} of tender {contract['tender_id']}. "
                     f"This contract won't be processed. Response: {data}",
                 )
                 break
-            elif response.status == 409:
+            elif (
+                response.status == 409 or
+                response.status == 400  # FIXME: should it be changed in cdb to back to 409?
+            ):
                 LOGGER.info(
                     f"Contract {contract['id']} of tender {contract['tender_id']} already exists in db",
                     extra=journal_context(
@@ -216,8 +209,10 @@ async def post_contract(contract: dict, session: ClientSession) -> None:
                 )
                 break
             elif response.status == (403, 410, 404, 405):
+                data = await response.text()
                 raise PermissionError(data)
             elif response.status != 201:
+                data = await response.text()
                 raise ConnectionError(data)
 
             LOGGER.info(
@@ -241,12 +236,5 @@ async def post_contract(contract: dict, session: ClientSession) -> None:
 
 
 async def process_listing(session: ClientSession, tender: dict) -> None:
-    if not check_tender(tender):
-        return None
-
-    contracts = await get_tender_contracts(tender, session)
-
-    for contract in contracts:
-        extend_contract(contract, tender)
-        await prepare_contract_data(contract, session)
-        await post_contract(contract, session)
+    if check_tender(tender):
+        await process_tender_contracts(tender, session)

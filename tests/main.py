@@ -8,7 +8,7 @@ from prozorro_bridge_contracting.journal_msg_ids import *
 from prozorro_bridge_contracting.utils import journal_context
 from prozorro_bridge_contracting.bridge import (
     get_tender_credentials,
-    get_tender_contracts,
+    process_tender_contracts,
     post_contract,
     prepare_contract_data,
     process_listing,
@@ -408,42 +408,18 @@ async def test_prepare_contract_data_with_exception(mocked_logger):
 
 
 @pytest.mark.asyncio
-@patch("prozorro_bridge_contracting.bridge.LOGGER")
-async def test_get_tender_contracts_resource_gone(mocked_logger):
-    tender_id = "1" * 32
-    contract_id = "2" * 32
-    tender = {
-        "id": tender_id,
-        "dateModified": datetime.now().isoformat(),
-        "contracts": [{"id": contract_id, "status": "active"}],
-    }
-    session_mock = AsyncMock()
-    session_mock.head = AsyncMock(
-        side_effect=[
-            MagicMock(status=410, text=AsyncMock(return_value=json.dumps({"status": "error"}))),
-        ]
-    )
-
-    contracts = await get_tender_contracts(tender, session_mock)
-
-    logger_msg = f"Sync contract {contract_id} of tender {tender_id} has been archived"
-    extra = journal_context(
-        {"MESSAGE_ID": DATABRIDGE_CONTRACT_TO_SYNC},
-        {"CONTRACT_ID": contract_id, "TENDER_ID": tender_id},
-    )
-    mocked_logger.info.assert_called_once_with(logger_msg, extra=extra)
-    assert contracts == []
-
-
-@pytest.mark.asyncio
 @patch("prozorro_bridge_contracting.single.LOGGER", MagicMock())
-async def test_get_tender_contracts_not_exists():
+async def test_process_tender_contracts_not_exists():
     tender_id = "1" * 32
     contract = {"id": "2" * 32, "status": "active"}
     tender = {
         "id": tender_id,
-        "dateModified": datetime.now().isoformat(),
         "contracts": [contract],
+        "procuringEntity": "procuringEntity",
+    }
+    tender_credentials_data = {
+        "tender_token": "tender_token",
+        "owner": "owner",
     }
     session_mock = AsyncMock()
     session_mock.head = AsyncMock(
@@ -451,11 +427,40 @@ async def test_get_tender_contracts_not_exists():
             MagicMock(status=404, text=AsyncMock(return_value=json.dumps({"error": "Not found"}))),
         ]
     )
+    session_mock.get = AsyncMock(
+        side_effect=[
+            MagicMock(status=200, text=AsyncMock(return_value=json.dumps({"data": tender_credentials_data}))),
+        ]
+    )
+    session_mock.post = AsyncMock(
+        return_value=MagicMock(status=201)
+    )
 
-    contracts = await get_tender_contracts(tender, session_mock)
+    await process_tender_contracts(tender, session_mock)
 
-    session_mock.head.assert_called_once()
-    assert contracts == [contract]
+    assert session_mock.head.mock_calls == [
+        call(
+            f"{BASE_URL}/contracts/{contract['id']}",
+            headers=HEADERS
+        )
+    ]
+    assert session_mock.post.mock_calls == [
+        call(
+            f"{BASE_URL}/contracts",
+            json={
+                'data': {
+                    "id": contract['id'],
+                    "status": "active",
+                    "procuringEntity": "procuringEntity",
+                    "owner": "owner",
+                    "tender_token": "tender_token",
+                    "tender_id": tender_id,
+                }
+            },
+            headers=HEADERS
+        ),
+    ]
+
 
 
 @pytest.mark.asyncio
