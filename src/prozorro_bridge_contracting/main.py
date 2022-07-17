@@ -5,8 +5,19 @@ import sentry_sdk
 from sentry_sdk.integrations.aiohttp import AioHttpIntegration
 from prozorro_crawler.main import main
 
-from prozorro_bridge_contracting.bridge import process_listing, sync_single_tender
-from prozorro_bridge_contracting.settings import SENTRY_DSN, API_OPT_FIELDS
+from prozorro_bridge_contracting.bridge import process_listing
+from prozorro_bridge_contracting.single import sync_single_tender
+from prozorro_bridge_contracting.settings import SENTRY_DSN
+
+
+API_OPT_FIELDS = (
+    "status",
+    "lots",
+    "contracts",
+    "procurementMethodType",
+    "procuringEntity",
+    "mode",
+)
 
 
 async def data_handler(session: ClientSession, items: list) -> None:
